@@ -16,7 +16,7 @@ def generate_launch_description():
         
         Node(
             package='hal_lucidlabs_helios2',
-            executable='HALHelios',
+            executable='HALHeliosExecutable',
             name='hal_lucidlabs_helios2',
             output={
                     "stdout": "screen",

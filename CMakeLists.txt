@@ -21,6 +21,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(rcutils)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -50,27 +51,34 @@ link_directories(
   $ENV{ARENA_PATH}/GenICam/library/lib/Linux64_x64
 )
 
-add_executable(HALHelios src/lucidlabs_helios2.cpp)
+add_library(HALHelios SHARED src/lucidlabs_helios2.cpp)
 target_link_libraries(HALHelios 
--larena 
--lsave 
--lgentl 
--lGCBase_gcc$ENV{ARENA_GCCVER} 
--lGenApi_gcc$ENV{ARENA_GCCVER} 
--lLog_gcc$ENV{ARENA_GCCVER} 
--llog4cpp_gcc$ENV{ARENA_GCCVER} 
--lMathParser_gcc$ENV{ARENA_GCCVER} 
--lNodeMapData_gcc$ENV{ARENA_GCCVER} 
--lXmlParser_gcc$ENV{ARENA_GCCVER}
--lavcodec 
--lavformat 
--lavutil 
--lswresample)
+  -larena
+  -lsave
+  -lgentl
+  -lGCBase_gcc$ENV{ARENA_GCCVER}
+  -lGenApi_gcc$ENV{ARENA_GCCVER}
+  -lLog_gcc$ENV{ARENA_GCCVER}
+  -llog4cpp_gcc$ENV{ARENA_GCCVER}
+  -lMathParser_gcc$ENV{ARENA_GCCVER}
+  -lNodeMapData_gcc$ENV{ARENA_GCCVER}
+  -lXmlParser_gcc$ENV{ARENA_GCCVER
+  -lavcodec
+  -lavformat
+  -lavutil
+  -lswresample)
 ament_target_dependencies(HALHelios rclcpp rcutils std_msgs sensor_msgs geometry_msgs pcl_conversions)
 
+rclcpp_components_register_node(
+  HALHelios
+  PLUGIN "hal::LucidlabsHelios2"
+  EXECUTABLE HALHeliosExecutable)
+
 install(TARGETS HALHelios
-  EXPORT export_${PROJECT_NAME}
-  DESTINATION lib/${PROJECT_NAME})
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
 
 install(DIRECTORY
   launch
