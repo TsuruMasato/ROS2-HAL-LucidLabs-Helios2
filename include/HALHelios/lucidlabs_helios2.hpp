@@ -27,6 +27,7 @@ class LucidlabsHelios2 : public rclcpp::Node {
     GenApi::INodeMap* pStreamNodeMap = nullptr;
     Arena::IImage* pImage = nullptr;
     float offX, offY, offZ;
+    float scaleX, scaleY, scaleZ;
     std::string output_topic;
     int threshold, accum, exposure, mode;
     bool spatial_filter, flying_filter;

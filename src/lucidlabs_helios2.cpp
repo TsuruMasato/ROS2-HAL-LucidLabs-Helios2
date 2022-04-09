@@ -82,14 +82,8 @@ LucidlabsHelios2::LucidlabsHelios2(const rclcpp::NodeOptions & options) : Node("
         pStreamBufferHandlingMode->SetIntValue(pNewestOnly->GetValue());
 
         GenApi::CEnumerationPtr pPixelMode = pNodeMap->GetNode("PixelFormat");
-        GenApi::CEnumEntryPtr pCoord3D_ABC16s = pPixelMode->GetEntryByName("Coord3D_ABC16");
-        pPixelMode->SetIntValue(pCoord3D_ABC16s->GetValue());
-
-        /*
-        GenApi::CIntegerPtr pDeviceStreamChannelPacketSize = pNodeMap->GetNode("DeviceStreamChannelPacketSize");
-        pDeviceStreamChannelPacketSize->SetValue(pDeviceStreamChannelPacketSize->GetMax());
-        std::cout << "MTU: " << pDeviceStreamChannelPacketSize->GetMax() << std::endl;
-        */
+        GenApi::CEnumEntryPtr pCoord3D_ABCY16 = pPixelMode->GetEntryByName("Coord3D_ABCY16");
+        pPixelMode->SetIntValue(pCoord3D_ABCY16->GetValue());
 
         Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamAutoNegotiatePacketSize", true);
         Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamPacketResendEnable", true);
@@ -144,26 +138,37 @@ LucidlabsHelios2::LucidlabsHelios2(const rclcpp::NodeOptions & options) : Node("
         GenApi::CEnumEntryPtr pCoordinateB = pScan3DCoordinateSelector->GetEntryByName("CoordinateB");
         GenApi::CEnumEntryPtr pCoordinateC = pScan3DCoordinateSelector->GetEntryByName("CoordinateC");
         GenApi::CFloatPtr pScan3DCoordinateOffset = pNodeMap->GetNode("Scan3dCoordinateOffset");
+        GenApi::CFloatPtr pScan3DCoordinateScale = pNodeMap->GetNode("Scan3dCoordinateScale");
 
-        Arena::SetNodeValue<bool>(pNodeMap, "Scan3dConfidenceThresholdEnable", true);
-
-        GenApi::CIntegerPtr pThresh = pNodeMap->GetNode("Scan3dConfidenceThresholdMin");
-        pThresh->SetValue(threshold);
+        GenApi::CBooleanPtr pConfidenceFilter = pNodeMap->GetNode("Scan3dConfidenceThresholdEnable");        
+        pConfidenceFilter->SetValue(confidence_filter);
+        GenApi::CIntegerPtr pConfThresh = pNodeMap->GetNode("Scan3dConfidenceThresholdMin");
+        pConfThresh->SetValue(confidence_filter_threshold);
 
         GenApi::CBooleanPtr pSpatialFilter = pNodeMap->GetNode("Scan3dSpatialFilterEnable");
         pSpatialFilter->SetValue(spatial_filter);
 
         GenApi::CBooleanPtr pFlyingFilter = pNodeMap->GetNode("Scan3dFlyingPixelsRemovalEnable");
         pFlyingFilter->SetValue(flying_filter);
+        // Maybe not available on Helios2
+        GenApi::CIntegerPtr pFlyingThresh = pNodeMap->GetNode("Scan3dFlyingPixelsDistanceThreshold");
+        pFlyingThresh->SetValue(flying_filter_threshold);
 
         Arena::SetNodeValue<int64_t>(pDevice->GetNodeMap(), "Scan3dImageAccumulation", accum);
+        //Arena::SetNodeValue<int64_t>(pDevice->GetNodeMap(), "Scan3dHDRMode", 0); // TBC
 
         pScan3DCoordinateSelector->SetIntValue(pCoordinateA->GetValue());
         offX = pScan3DCoordinateOffset->GetValue();
+        scaleX = pScan3DCoordinateScale->GetValue();
         pScan3DCoordinateSelector->SetIntValue(pCoordinateB->GetValue());
         offY = pScan3DCoordinateOffset->GetValue();
+        scaleY = pScan3DCoordinateScale->GetValue();
         pScan3DCoordinateSelector->SetIntValue(pCoordinateC->GetValue());
         offZ = pScan3DCoordinateOffset->GetValue();
+        scaleZ = pScan3DCoordinateScale->GetValue();
+
+        RCLCPP_INFO(get_logger(), "Offset = %f | %f | %f", offX, offY, offZ);
+        RCLCPP_INFO(get_logger(), "Scale  = %f | %f | %f", scaleX, scaleY, scaleZ);
 
         pDevice->StartStream();
     } catch (GenICam::GenericException &ge) {
@@ -180,6 +185,7 @@ LucidlabsHelios2::LucidlabsHelios2(const rclcpp::NodeOptions & options) : Node("
     using namespace std::chrono_literals;
     pc_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(output_topic, 1);
     timer = create_wall_timer(10ms, std::bind(&LucidlabsHelios2::runtime, this));
+    // TODO: compute time period w.r.t. mode/accumulation/HDR settings
 }
 
 void LucidlabsHelios2::runtime() {
@@ -204,7 +210,7 @@ void LucidlabsHelios2::get_point_cloud() {
         return;
     }
     if (pImage == nullptr) return;
-    pcl::PointCloud<pcl::PointXYZ> cloud;
+    pcl::PointCloud<pcl::PointXYZI> cloud;
     sensor_msgs::msg::PointCloud2 msg;
     cloud.reserve(640*480);
 
@@ -215,16 +221,19 @@ void LucidlabsHelios2::get_point_cloud() {
     }
 
     const uint16_t *data = (uint16_t*)(pImage->GetData());
-    uint16_t A, B, C;
+    uint16_t A, B, C, Y;
 
     for (int o = 0; o < 640*480; o++) {
-        A = data[o*3+0];
-        B = data[o*3+1];
-        C = data[o*3+2];
-        if (A != 0xFFFF && B != 0xFFFF && C != 0xFFFF && (C*0.25f + offZ) > 300.0f/*mm*/) {
-            cloud.emplace_back( (A*0.25f+offX)/1000,
-                                (B*0.25f+offY)/1000,
-                                (C*0.25f+offZ)/1000);
+        A = data[o*4+0];
+        B = data[o*4+1];
+        C = data[o*4+2];
+        Y = data[o*4+3];
+        // TODO revise minimum radial distance
+        if (A != 0xFFFF && B != 0xFFFF && C != 0xFFFF && (C*scaleZ + offZ) > 300.0f/*mm*/) {
+            cloud.emplace_back( (A*scaleX+offX)/1000,
+                                (B*scaleY+offY)/1000,
+                                (C*scaleZ+offZ)/1000,
+                                 Y);
         }
     }
     pDevice->RequeueBuffer(pImage);
