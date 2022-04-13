@@ -280,13 +280,13 @@ LucidlabsHelios2::~LucidlabsHelios2() {
 
 template <typename PointT>
 void LucidlabsHelios2::get_point_cloud() {
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     try {
         pImage = pDevice->GetImage(15);
     } catch (...) {
         return;
     }
     if (pImage == nullptr) return;
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     pcl::PointCloud<PointT> cloud;
     sensor_msgs::msg::PointCloud2 msg;
     cloud.reserve(640*480);
@@ -350,21 +350,17 @@ void LucidlabsHelios2::get_point_cloud() {
     }
 
     pDevice->RequeueBuffer(pImage);
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    RCLCPP_INFO(get_logger(), "Acquisition = %d [ms]", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
 
     begin = std::chrono::steady_clock::now();
     pcl::toROSMsg(cloud, msg);
     msg.header.stamp = clock->now();
     msg.header.frame_id = frame_id;
     msg.is_dense = false;
-    end = std::chrono::steady_clock::now();
-    RCLCPP_INFO(get_logger(), "Conversion = %d [ms]", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
 
     begin = std::chrono::steady_clock::now();
     pc_publisher_->publish(msg);
-    end = std::chrono::steady_clock::now();
-    RCLCPP_INFO(get_logger(), "Publishing = %d [ms]", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    RCLCPP_INFO(get_logger(), "Time difference = %d [ms]", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
 }
 
 }  // namespace hal
