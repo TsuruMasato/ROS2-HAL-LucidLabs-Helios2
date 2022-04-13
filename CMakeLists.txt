@@ -26,7 +26,7 @@ find_package(rcutils)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(PCL 1.8 REQUIRED COMPONENTS common io geometry search features)
+find_package(PCL 1.10 REQUIRED COMPONENTS common io geometry search features)
 
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
@@ -62,7 +62,7 @@ target_link_libraries(HALHelios
   -llog4cpp_gcc$ENV{ARENA_GCCVER}
   -lMathParser_gcc$ENV{ARENA_GCCVER}
   -lNodeMapData_gcc$ENV{ARENA_GCCVER}
-  -lXmlParser_gcc$ENV{ARENA_GCCVER
+  -lXmlParser_gcc$ENV{ARENA_GCCVER}
   -lavcodec
   -lavformat
   -lavutil

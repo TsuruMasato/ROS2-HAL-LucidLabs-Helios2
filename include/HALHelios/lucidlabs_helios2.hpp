@@ -20,29 +20,38 @@ namespace hal {
 
 class LucidlabsHelios2 : public rclcpp::Node {
  private:
-    Arena::ISystem* pSystem = nullptr;
-    std::vector<Arena::DeviceInfo> deviceInfos;
-    Arena::IDevice* pDevice = nullptr;
-    GenApi::INodeMap* pNodeMap = nullptr;
-    GenApi::INodeMap* pStreamNodeMap = nullptr;
-    Arena::IImage* pImage = nullptr;
-    float offX, offY, offZ;
-    std::string output_topic;
-    int threshold, accum, exposure, mode;
-    bool spatial_filter, flying_filter;
-    std::string frame_id;
-    rclcpp::Clock::SharedPtr clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+   Arena::ISystem* pSystem = nullptr;
+   std::vector<Arena::DeviceInfo> deviceInfos;
+   Arena::IDevice* pDevice = nullptr;
+   GenApi::INodeMap* pNodeMap = nullptr;
+   GenApi::INodeMap* pStreamNodeMap = nullptr;
+   Arena::IImage* pImage = nullptr;
+   float offX, offY, offZ;
+   float scaleX, scaleY, scaleZ;
+   std::string output_topic;
+   int confidence_filter_threshold, flying_filter_threshold, accum, exposure, mode, hdr_mode;
+   bool confidence_filter, spatial_filter, flying_filter;
+   bool structured_cloud, publish_intensity;
+   std::string frame_id;
+   rclcpp::Clock::SharedPtr clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
 
-    void runtime();
-    rclcpp::TimerBase::SharedPtr timer;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pc_publisher_;
+   Arena::IDevice* findDevice();
 
+   void runtime();
+
+   template <typename PointT>
+   void get_point_cloud();
+
+   rclcpp::TimerBase::SharedPtr timer;
+   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pc_publisher_;
+
+   enum class cam_model {HELIOS_2, HELIOS_2_PLUS};
+   cam_model m;
+   
  public:
-    LucidlabsHelios2(const rclcpp::NodeOptions & options);
+   LucidlabsHelios2(const rclcpp::NodeOptions & options);
 
-    ~LucidlabsHelios2();
-
-    void get_point_cloud();
+   ~LucidlabsHelios2();
 };
 
 }  //namespace hal

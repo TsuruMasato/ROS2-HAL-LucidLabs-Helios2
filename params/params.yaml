@@ -1,9 +1,23 @@
 hal_lucidlabs_helios2:
   ros__parameters:
     output_topic: "/point_cloud"
-    threshold: 200
-    spatial_filter: true
-    flying_filter: true
+    structured_cloud: true
+    publish_intensity: true
+    confidence_filter:
+      enable: True
+      threshold: 200
+    spatial_filter:
+      enable: true
+    flying_filter: 
+      enable: true
+      threshold: 10
+    # Options dumped with arv-tool
+      #Enumeration: 'Scan3dHDRMode'
+          #EnumEntry: (0) 'LowNoiseHDRX8'
+          #EnumEntry: (1) 'LowNoiseHDRX4'
+          #EnumEntry: (2) 'StandardHDR'
+          #EnumEntry: (3) 'Off'
+    hdr_mode: 3      
     accumulate_frames: 2
     frame_id: "camera"
     # Options dumped with arv-tool
