@@ -18,14 +18,13 @@
 
 namespace hal {
 
-class LucidlabsHelios2 : public rclcpp::Node {
+class LucidlabsHelios2 : public rclcpp::Node, public Arena::IImageCallback {
  private:
    Arena::ISystem* pSystem = nullptr;
    std::vector<Arena::DeviceInfo> deviceInfos;
    Arena::IDevice* pDevice = nullptr;
    GenApi::INodeMap* pNodeMap = nullptr;
    GenApi::INodeMap* pStreamNodeMap = nullptr;
-   Arena::IImage* pImage = nullptr;
    float offX, offY, offZ;
    float scaleX, scaleY, scaleZ;
    std::string output_topic;
@@ -37,16 +36,18 @@ class LucidlabsHelios2 : public rclcpp::Node {
 
    Arena::IDevice* findDevice();
 
+   Arena::IImage* try_get_image();
    void runtime();
+   void OnImage(Arena::IImage* pImage) override;
 
    template <typename PointT>
-   void get_point_cloud();
+   void get_point_cloud(Arena::IImage* pImage);
 
-   rclcpp::TimerBase::SharedPtr timer;
    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pc_publisher_;
 
    enum class cam_model {HELIOS_2, HELIOS_2_PLUS};
    cam_model m;
+   Arena::IImageCallback* pCallbackHandler;
    
  public:
    LucidlabsHelios2(const rclcpp::NodeOptions & options);

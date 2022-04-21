@@ -197,7 +197,9 @@ LucidlabsHelios2::LucidlabsHelios2(const rclcpp::NodeOptions & options) : Node("
 
         /************************/
 
-        pDevice->StartStream();
+        pCallbackHandler = this;
+        pDevice->RegisterImageCallback(pCallbackHandler);
+
     } catch (GenICam::GenericException &ge) {
         RCLCPP_ERROR(get_logger(), "GenICam exception thrown: %s", ge.what());
         std::abort();
@@ -211,8 +213,7 @@ LucidlabsHelios2::LucidlabsHelios2(const rclcpp::NodeOptions & options) : Node("
 
     using namespace std::chrono_literals;
     pc_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(output_topic, 1);
-    timer = create_wall_timer(10ms, std::bind(&LucidlabsHelios2::runtime, this));
-    // TODO: compute time period w.r.t. mode/accumulation/HDR settings
+    pDevice->StartStream();
 }
 
 Arena::IDevice* LucidlabsHelios2::findDevice() {
@@ -262,13 +263,23 @@ Arena::IDevice* LucidlabsHelios2::findDevice() {
 }
 
 void LucidlabsHelios2::runtime() {
+    auto img = try_get_image();
     if (publish_intensity)
-        get_point_cloud<pcl::PointXYZI>();
+        get_point_cloud<pcl::PointXYZI>(img);
     else        
-        get_point_cloud<pcl::PointXYZ>();
+        get_point_cloud<pcl::PointXYZ>(img);
+    pDevice->RequeueBuffer(img);
+}
+
+void LucidlabsHelios2::OnImage(Arena::IImage* img) {
+    if (publish_intensity)
+        get_point_cloud<pcl::PointXYZI>(img);
+    else        
+        get_point_cloud<pcl::PointXYZ>(img);
 }
 
 LucidlabsHelios2::~LucidlabsHelios2() {
+    pDevice->DeregisterImageCallback(pCallbackHandler);
     if (pDevice) {
         pDevice->StopStream();
         pSystem->DestroyDevice(pDevice);
@@ -278,24 +289,29 @@ LucidlabsHelios2::~LucidlabsHelios2() {
     }
 }
 
-template <typename PointT>
-void LucidlabsHelios2::get_point_cloud() {
+Arena::IImage* LucidlabsHelios2::try_get_image() {
     try {
-        pImage = pDevice->GetImage(15);
+        auto img = pDevice->GetImage(15);
+        if (img->IsIncomplete()) {
+            RCLCPP_WARN(get_logger(), "Incomplete frame");
+            pDevice->RequeueBuffer(img);
+            return nullptr;
+        }
+        return img;
     } catch (...) {
-        return;
+        return nullptr;
     }
+}
+
+// TODO split ROS publishing to ensure a short image callback
+// maybe using ROS timers to put an event in ROS queue after copying the buffer is sufficient
+template <typename PointT>
+void LucidlabsHelios2::get_point_cloud(Arena::IImage* pImage) {
     if (pImage == nullptr) return;
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     pcl::PointCloud<PointT> cloud;
     sensor_msgs::msg::PointCloud2 msg;
     cloud.reserve(640*480);
-
-    if (pImage->IsIncomplete()) {
-        RCLCPP_WARN(get_logger(), "Incomplete frame");
-        pDevice->RequeueBuffer(pImage);
-        return;
-    }
 
     const uint16_t *data = (uint16_t*)(pImage->GetData());
     uint16_t A, B, C, Y;
@@ -349,15 +365,11 @@ void LucidlabsHelios2::get_point_cloud() {
         cloud.resize(cloud.size()-1);
     }
 
-    pDevice->RequeueBuffer(pImage);
-
-    begin = std::chrono::steady_clock::now();
     pcl::toROSMsg(cloud, msg);
     msg.header.stamp = clock->now();
     msg.header.frame_id = frame_id;
     msg.is_dense = false;
 
-    begin = std::chrono::steady_clock::now();
     pc_publisher_->publish(msg);
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     RCLCPP_INFO(get_logger(), "Time difference = %d [ms]", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
