@@ -37,7 +37,7 @@ find_package(pcl_conversions REQUIRED)
 message("SDK path:           " $ENV{ARENA_PATH})
 message("SDK build version:  " $ENV{ARENA_GCCVER})
 
-include_directories(
+include_directories( SYSTEM
   include
   $ENV{ARENA_PATH}/include/Arena
 	$ENV{ARENA_PATH}/include/Save
